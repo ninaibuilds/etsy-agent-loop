@@ -4,11 +4,12 @@ them to the connected Etsy store.
 
 Blueprint reference (common):
   5   → Gildan 64000 Softstyle T-shirt
-  473 → Poster (Paper)
+  282 → Matte Vertical Posters
 
 Print provider reference (common):
-  29  → Monster Digital   (high quality, US-based)
-  36  → The Dream Junction (budget option)
+  29  → Monster Digital   (t-shirts, US-based)
+  99  → District Photo    (posters, US-based)
+  36  → The Dream Junction (budget fallback)
 """
 
 import base64
@@ -23,14 +24,17 @@ from utils.helpers import log_action
 
 PRINTIFY_BASE = "https://api.printify.com/v1"
 
-# Blueprint IDs
+# Blueprint IDs — verified against live Printify catalog
 BLUEPRINTS: dict[str, int] = {
     "t-shirt": 5,
-    "poster":  473,
+    "poster":  282,   # Matte Vertical Posters (provider 99)
 }
 
-# Preferred print providers in priority order
-PROVIDER_PRIORITY = [29, 36, 99]  # Monster Digital, Dream Junction, fallback
+# Provider priority per product type (providers are blueprint-specific)
+PROVIDER_PRIORITY: dict[str, list[int]] = {
+    "t-shirt": [29, 36, 99],   # Monster Digital preferred for shirts
+    "poster":  [99, 2],        # District Photo preferred for posters
+}
 
 _HEADERS: dict | None = None
 
@@ -92,9 +96,10 @@ def _get_variants(blueprint_id: int, provider_id: int) -> list[int]:
     return [v["id"] for v in variants if v.get("is_available", True)][:5]
 
 
-def _find_working_provider(blueprint_id: int) -> tuple[int, list[int]]:
-    """Try providers in order; return first one that has variants available."""
-    for pid in PROVIDER_PRIORITY:
+def _find_working_provider(blueprint_id: int, product_type: str = "t-shirt") -> tuple[int, list[int]]:
+    """Try providers in priority order for the given product type."""
+    priority = PROVIDER_PRIORITY.get(product_type, PROVIDER_PRIORITY["t-shirt"])
+    for pid in priority:
         try:
             variants = _get_variants(blueprint_id, pid)
             if variants:
@@ -102,7 +107,7 @@ def _find_working_provider(blueprint_id: int) -> tuple[int, list[int]]:
         except Exception:
             continue
     raise RuntimeError(
-        f"No working print provider found for blueprint {blueprint_id}"
+        f"No working print provider found for blueprint {blueprint_id} ({product_type})"
     )
 
 
@@ -243,8 +248,9 @@ def printify_node(state: dict) -> dict:
             image_id = upload_image(path)
 
             # 2. Find blueprint + working provider
-            blueprint_id = BLUEPRINTS.get(brief.get("product_type", "t-shirt"), 5)
-            provider_id, variants = _find_working_provider(blueprint_id)
+            product_type = brief.get("product_type", "t-shirt")
+            blueprint_id = BLUEPRINTS.get(product_type, 5)
+            provider_id, variants = _find_working_provider(blueprint_id, product_type)
             log_action("printify_agent", f"Using provider={provider_id}, {len(variants)} variants")
 
             # 3. Create product with SEO content already included
