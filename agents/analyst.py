@@ -48,7 +48,9 @@ _BRIEF_TOOL = {
                         "suggested_text",
                         "color_palette",
                         "product_type",
+                        "competitor_prices",
                         "price_point",
+                        "pricing_rationale",
                         "seo_title",
                         "seo_description",
                         "seo_tags",
@@ -80,9 +82,23 @@ _BRIEF_TOOL = {
                             "type": "string",
                             "enum": ["t-shirt", "poster"],
                         },
+                        "competitor_prices": {
+                            "type": "array",
+                            "description": "List of actual competitor prices found for this niche (USD numbers only).",
+                            "items": {"type": "number"},
+                        },
                         "price_point": {
                             "type": "number",
-                            "description": "Recommended retail price in USD.",
+                            "description": (
+                                "Our retail price in USD. Must be 5-8% below the lowest "
+                                "competitor price found for this niche. "
+                                "Hard minimums: t-shirt $18.99, poster $13.99 (to protect margin). "
+                                "Never undercut by more than $3 below the lowest competitor."
+                            ),
+                        },
+                        "pricing_rationale": {
+                            "type": "string",
+                            "description": "One sentence explaining the price chosen vs competitors.",
                         },
                         "seo_title": {
                             "type": "string",
@@ -127,6 +143,15 @@ Rules:
 - seo_title: max 140 chars, start with the strongest keyword phrase.
 - seo_description: 3-4 paragraphs, include bullet-point features, end with CTA.
 - seo_tags: exactly 13 tags, each max 20 chars, mix broad + long-tail keywords.
+
+Pricing strategy (strictly follow all three rules):
+1. Set competitor_prices to the actual prices you see for similar items in the data.
+   If no prices are visible, estimate based on typical Etsy prices for that niche.
+2. Set price_point to 5-8% below the LOWEST competitor price you found.
+3. Hard minimums: t-shirt $18.99, poster $13.99 — never go below these even if
+   competitors are cheaper (we need margin to cover Printify base cost).
+4. Never undercut by more than $3 below the lowest competitor price.
+5. Write a one-sentence pricing_rationale explaining the chosen price.
 """
 
 
@@ -151,20 +176,35 @@ def analyst_node(state: dict) -> dict:
         )
     product_summary = "\n".join(summary_rows)
 
+    # Extract non-zero prices for competitive pricing reference
+    seen_prices = sorted({p["price"] for p in products if p.get("price", 0) > 0})
+    price_note = (
+        f"Competitor prices visible in this data: {seen_prices} USD. "
+        "Use these to set your price_point 5-8% below the lowest relevant price."
+        if seen_prices
+        else "No prices visible in scraped data — estimate typical Etsy prices for each niche."
+    )
+
     if products:
         user_message = f"""Here are {len(products)} trending Etsy products:
 
 {product_summary}
 
-Identify the top 3 print-on-demand design opportunities and return structured briefs."""
+{price_note}
+
+Identify the top 3 print-on-demand design opportunities and return structured briefs \
+with competitive pricing following the rules in your system prompt."""
     else:
-        user_message = """No live product data was scraped (Etsy blocked the request).
+        user_message = f"""No live product data was scraped (Etsy blocked the request).
 
 Use your knowledge of current Etsy bestsellers and print-on-demand trends to identify
 the top 3 high-demand design opportunities right now. Focus on niches with proven
 consistent sales: funny quotes, pet lovers, professions, nature/outdoors, retro styles.
 
-Return 3 ready-to-execute design briefs as if you had scraped the data yourself."""
+{price_note}
+
+Return 3 ready-to-execute design briefs with competitive pricing following the rules \
+in your system prompt."""
 
     try:
         client = _get_client()
