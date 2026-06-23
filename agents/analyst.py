@@ -38,7 +38,7 @@ _BRIEF_TOOL = {
             "briefs": {
                 "type": "array",
                 "description": "Exactly 3 design briefs ranked by opportunity.",
-                "minItems": 1,
+                "minItems": 3,
                 "maxItems": 3,
                 "items": {
                     "type": "object",
@@ -239,6 +239,12 @@ in your system prompt."""
             log_action(
                 "analyst_agent",
                 f"  Brief {idx}: [{b['product_type']}] {b['niche']} — \"{b['suggested_text'][:60]}\"",
+            )
+            log_action(
+                "analyst_agent",
+                f"    Price: ${b.get('price_point', 0):.2f}  "
+                f"competitors={b.get('competitor_prices', [])}  "
+                f"rationale: {b.get('pricing_rationale', '')[:80]}",
             )
 
         return {**state, "design_briefs": briefs, "errors": errors}

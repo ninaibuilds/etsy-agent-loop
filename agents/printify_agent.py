@@ -36,6 +36,12 @@ PROVIDER_PRIORITY: dict[str, list[int]] = {
     "poster":  [99, 2],        # District Photo preferred for posters
 }
 
+# How many variants (sizes) to enable per product type
+VARIANT_LIMIT: dict[str, int] = {
+    "t-shirt": 5,    # S / M / L / XL / 2XL
+    "poster":  10,   # multiple size options increases sales surface area
+}
+
 _HEADERS: dict | None = None
 
 
@@ -74,7 +80,8 @@ def upload_image(image_path: str) -> str:
         json={"file_name": path.name, "contents": contents},
         timeout=120,
     )
-    r.raise_for_status()
+    if not r.is_success:
+        raise RuntimeError(f"Image upload failed {r.status_code}: {r.text[:300]}")
     image_id = r.json()["id"]
     log_action("printify_agent", f"Image uploaded → id={image_id}")
     return image_id
@@ -82,18 +89,19 @@ def upload_image(image_path: str) -> str:
 
 # ── blueprint helpers ─────────────────────────────────────────────────────────
 
-def _get_variants(blueprint_id: int, provider_id: int) -> list[int]:
-    """Return a list of variant IDs for the given blueprint + provider."""
+def _get_variants(blueprint_id: int, provider_id: int, product_type: str = "t-shirt") -> list[int]:
+    """Return variant IDs for the given blueprint + provider, capped by product type."""
     r = httpx.get(
         f"{PRINTIFY_BASE}/catalog/blueprints/{blueprint_id}"
         f"/print_providers/{provider_id}/variants.json",
         headers=_headers(),
         timeout=30,
     )
-    r.raise_for_status()
+    if not r.is_success:
+        raise RuntimeError(f"Printify variants API error {r.status_code}: {r.text[:200]}")
     variants = r.json().get("variants", [])
-    # For t-shirts: return S/M/L/XL/2XL — first 5 enabled variants
-    return [v["id"] for v in variants if v.get("is_available", True)][:5]
+    limit = VARIANT_LIMIT.get(product_type, 5)
+    return [v["id"] for v in variants if v.get("is_available", True)][:limit]
 
 
 def _find_working_provider(blueprint_id: int, product_type: str = "t-shirt") -> tuple[int, list[int]]:
@@ -101,7 +109,7 @@ def _find_working_provider(blueprint_id: int, product_type: str = "t-shirt") -> 
     priority = PROVIDER_PRIORITY.get(product_type, PROVIDER_PRIORITY["t-shirt"])
     for pid in priority:
         try:
-            variants = _get_variants(blueprint_id, pid)
+            variants = _get_variants(blueprint_id, pid, product_type)
             if variants:
                 return pid, variants
         except Exception:
@@ -169,7 +177,8 @@ def create_product(image_id: str, brief: dict, provider_id: int, variants: list[
         json=payload,
         timeout=60,
     )
-    r.raise_for_status()
+    if not r.is_success:
+        raise RuntimeError(f"Product creation failed {r.status_code}: {r.text[:300]}")
     product = r.json()
     log_action("printify_agent", f"Product created → id={product['id']}")
     return product
@@ -183,17 +192,16 @@ def publish_product(product_id: str) -> dict:
         f"{PRINTIFY_BASE}/shops/{_shop_id()}/products/{product_id}/publish.json",
         headers=_headers(),
         json={
-            "title":             True,
-            "description":       True,
-            "images":            True,
-            "variants":          True,
-            "tags":              True,
-            "keyFeatures":       True,
-            "shipping_template": True,
+            "title":       True,
+            "description": True,
+            "images":      True,
+            "variants":    True,
+            "tags":        True,
         },
         timeout=60,
     )
-    r.raise_for_status()
+    if not r.is_success:
+        raise RuntimeError(f"Publish failed {r.status_code}: {r.text[:300]}")
     result = r.json()
     log_action("printify_agent", f"Product {product_id} published to Etsy")
     return result
