@@ -9,3 +9,4 @@ logs/
 etsy_agent.db
 *.png
 .DS_Store
+.langgraph_api/
