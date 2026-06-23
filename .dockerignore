@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+designs/
+logs/
+etsy_agent.db
+*.png

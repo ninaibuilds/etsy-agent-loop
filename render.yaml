@@ -1,0 +1,30 @@
+services:
+  - type: worker
+    name: etsy-agent-loop
+    env: docker
+    plan: starter          # $7/month — runs 24/7, never sleeps
+    disk:
+      name: etsy-data
+      mountPath: /data     # designs, SQLite DB, and logs stored here
+      sizeGB: 2            # ~$0.50/month extra
+
+    envVars:
+      # ── AI APIs ────────────────────────────────────────────────
+      - key: ANTHROPIC_API_KEY
+        sync: false        # you paste this in Render's dashboard
+      - key: OPENAI_API_KEY
+        sync: false
+
+      # ── Printify ───────────────────────────────────────────────
+      - key: PRINTIFY_API_KEY
+        sync: false
+      - key: PRINTIFY_SHOP_ID
+        sync: false
+
+      # ── Loop config ────────────────────────────────────────────
+      - key: LOOP_INTERVAL_HOURS
+        value: "6"
+
+      # ── Tells the app where to save files on Render ────────────
+      - key: DATA_DIR
+        value: /data

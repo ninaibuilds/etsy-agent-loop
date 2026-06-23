@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "etsy_agent_loop": "./main.py:graph"
+  },
+  "env": ".env"
+}
