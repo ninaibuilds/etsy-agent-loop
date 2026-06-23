@@ -14,6 +14,9 @@ beautifulsoup4>=4.12.0
 httpx>=0.27.0
 requests>=2.31.0
 
+# DuckDuckGo search — used to find Etsy listings without Cloudflare blocks
+ddgs>=0.1.0
+
 # Image processing
 Pillow>=10.4.0
 
